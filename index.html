@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<meta http-equiv="X-UA-Compatible" content="ie=edge">
+	<title>Pong!</title>
+	<style>
+		html, body {padding: 0;margin: 0; height: 100%; }
+		body { background:#000 url(assets/arcade-bg.png) center center no-repeat; background-size:cover; min-width: 1024px; min-height: 768px; }
+		#pong-container { position: absolute; top:50%; left:50%; transform: translate(-50%,-50%);  text-align:center; }
+		#pong {border:5px solid #3f0040;}
+		#logo { margin-bottom: 30px;}
+	</style>
+</head>
+<body>
+	<div id="pong-container">
+		<img src="assets/pong.png" alt="" id="logo">
+		<canvas	width="1024" height="768" id="pong">
+	</div>
+
+	<script>
+
+		
+		var canvas,
+			canvasContext,
+
+			// Settings	
+			ball = { 
+				pos: {x:0, y:0 },
+				speed: {x:10,y:4},
+				size: 10
+			},
+			fps = 60,
+			paddle = { 
+				width: 10, 
+				height:150, 
+				offset:10,
+				player1: { pos:0 },
+				player2: { pos:0 }
+			},
+			score = { player1:0, player2:0 },
+
+			sfx = {
+				bounce: 'assets/sfx/bounce.wav',
+				hit:'assets/sfx/bounce.wav',
+				score:'assets/sfx/hit.wav',
+				win:'assets/sfx/win.wav',
+				loose:'assets/sfx/loose.wav',
+
+				defaultVolume: 0.3
+			}
+		
+		var showingWinScreen = false;
+
+		const winningScore = 5;
+
+		window.onload = function(){
+
+			// Setup
+			canvas = document.getElementById('pong');
+			canvasContext = canvas.getContext('2d');
+
+			// Set Defaults
+			ballReset(); // center ball
+
+			paddle.player1.pos = canvas.height/2;
+			paddle.player2.pos = canvas.height/2;
+
+			// pre-load audio
+			sfx.bounce = new Audio( sfx.bounce );
+			sfx.hit = new Audio( sfx.hit );
+			sfx.score = new Audio( sfx.score );
+			sfx.win = new Audio( sfx.win );
+			sfx.loose = new Audio( sfx.loose );
+
+			sfx.bounce.volume = sfx.defaultVolume;
+			sfx.hit.volume = sfx.defaultVolume;
+			sfx.score.volume = sfx.defaultVolume;
+			sfx.win.volume = sfx.defaultVolume;
+			sfx.loose.volume = sfx.defaultVolume;
+			
+			// sfx.gameOver = new Audio( sfx.gameOver );
+
+
+			setInterval(function(){
+				move();
+				drawScene();
+			},1000/fps);
+
+			// mouse move event
+			canvas.addEventListener('mousemove', function(e){
+				var mousePos = calcMousePos(e);
+				paddle.player1.pos = mousePos.y;
+			});
+			canvas.addEventListener('click', function(){
+				if( showingWinScreen ){
+					score.player1 = 0;
+					score.player2 = 0;
+					ball.speed.x = 10;
+					showingWinScreen = false;
+				}
+			});
+
+			
+		};
+
+		function calcMousePos(e){
+			var rect = canvas.getBoundingClientRect();
+			var root = document.documentElement;
+			var mouseX = e.clientX -rect.left - root.scrollLeft;
+			var mouseY = e.clientY -rect.top - root.scrollTop;
+			return {
+				x:mouseX,
+				y:mouseY
+			}
+		}
+
+		function ballReset(){
+			if( score.player1 >= winningScore || score.player2 >= winningScore ){
+				showingWinScreen = true;
+				if(score.player1 > score.player2) {
+					sfx.win.play();
+				} else {
+					sfx.loose.play();
+				}
+			}
+			// center ball
+			ball.pos.x = canvas.width/2;
+			ball.pos.y = canvas.height/2;
+
+			// change direction
+			if(ball.speed.x < 0){
+				ball.speed.x--;
+			} else {
+				ball.speed.x++;
+			}
+			ball.speed.x = -ball.speed.x;
+			ball.speed.y = 0;
+		}
+
+		function move(){
+			if( showingWinScreen) { return; }
+			ball.pos.x += ball.speed.x;
+			ball.pos.y += ball.speed.y;
+
+			// AI move
+			player2Move();
+
+ 			// Player 1 paddle hit
+			if( ball.pos.y > ( paddle.player1.pos - paddle.height/2 ) && 
+				ball.pos.y < ( paddle.player1.pos + paddle.height/2 ) &&
+				ball.pos.x <= ( 0 + paddle.width + paddle.offset + ball.size )
+			){
+				sfx.hit.play();
+				ball.speed.x = -ball.speed.x
+				var deltaY = ball.pos.y - paddle.player1.pos;
+				ball.speed.y = deltaY * 0.15;
+			}
+
+			// Player 2 paddle hit
+			if( ball.pos.y > ( paddle.player2.pos - paddle.height/2 ) && 
+				ball.pos.y < ( paddle.player2.pos + paddle.height/2 ) &&
+				ball.pos.x >= ( canvas.width - ( paddle.width + paddle.offset + ball.size ) )
+			){
+				sfx.hit.play();
+				ball.speed.x = -ball.speed.x
+				var deltaY = ball.pos.y - paddle.player2.pos;
+				ball.speed.y = deltaY * 0.15;
+			}
+
+			if(ball.pos.x + ball.size > canvas.width || ball.pos.x - ball.size  < 0 ){
+				if( ball.pos.x - ball.size  < 0 ) {
+					score.player2++;
+				} else {
+					score.player1++;
+				}
+				sfx.score.play();
+				ballReset();
+			}
+
+			if(ball.pos.y - ball.size  < 0 ){
+				sfx.bounce.play();
+				ball.speed.y = -ball.speed.y
+			}
+
+			if(ball.pos.y + ball.size > canvas.height ){
+				sfx.bounce.play();
+				ball.speed.y = -ball.speed.y
+			}
+
+		}
+
+		function player2Move(){
+			var playerSpeed = 4;
+			if( score.player1 > score.player2 ){
+				playerSpeed += Math.floor( 1.2 * Math.abs(score.player1-score.player2));
+			}
+
+			var paddleCenter = paddle.player2.pos;
+			// paddle.player2.pos = ball.pos.y;
+			if( paddleCenter < ball.pos.y +30 ) {
+				paddle.player2.pos += playerSpeed;
+			} else if( paddleCenter > ball.pos.y -30 ) {
+				paddle.player2.pos -= playerSpeed;
+			}
+		}
+
+		function drawScene(){
+			// bg
+			drawRect(0,0, canvas.width, canvas.height,'black');
+
+			if( showingWinScreen ) { 
+				drawRect(100,100,canvas.width-200, canvas.height-200,'white');
+				drawRect(105,105,canvas.width-210, canvas.height-210,'black');
+				canvasContext.fillStyle = '#ffff00';
+				canvasContext.font="50px Courier";
+				canvasContext.textAlign="center";
+				var txtMsg = 'You win!';
+				if( score.player2 > score.player1){
+					txtMsg = 'You lose!';
+				}
+				canvasContext.fillText(txtMsg, canvas.width/2, (canvas.height/2) - 50);
+				canvasContext.fillText(score.player1 +' - '+ score.player2, canvas.width/2, (canvas.height/2));
+				canvasContext.font="20px Courier";
+				canvasContext.fillText('Click to continue', canvas.width/2, (canvas.height/2) + 60);
+				return; 
+			}
+
+			var netWidth = 2,
+				netHeight = canvas.height/31;
+			for(var i = netHeight; i<=canvas.height; i += netHeight*2 ){
+				drawRect( canvas.width/2, i, netWidth, netHeight, 'white' );
+			}
+
+			// ball
+			drawCirc(ball.pos.x,ball.pos.y,ball.size, 'red')
+
+			//paddles			
+			drawRect(paddle.offset, paddle.player1.pos - (paddle.height/2), paddle.width,paddle.height,'white');
+			drawRect(canvas.width - (paddle.offset + paddle.width), paddle.player2.pos - (paddle.height/2), paddle.width,paddle.height,'white');
+
+			// score
+			canvasContext.font="50px Courier";
+			canvasContext.textAlign="start";
+			canvasContext.fillStyle = 'yellow';
+			canvasContext.fillText(score.player1, 100, 100);
+			canvasContext.textAlign="end";
+			canvasContext.fillText(score.player2, canvas.width - 100, 100);
+		}
+
+		function drawRect(posX,posY,width,height,color){
+			canvasContext.fillStyle = color;
+			canvasContext.fillRect(posX,posY,width,height);
+		}
+
+		function drawCirc(posX,posY,radius,color){
+			canvasContext.fillStyle = color;
+			canvasContext.beginPath();
+			canvasContext.arc(posX,posY, radius, 0, Math.PI*2,true);
+			canvasContext.fill();
+		}
+	</script>
+</body>
+</html>
